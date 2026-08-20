@@ -472,6 +472,43 @@ def linear_to_db(lin):
     lin = max(lin, 1e-6)
     return 20.0 * math.log10(lin)
 
+def read_baked_eq_gains():
+    """Lee los valores de Gain tal como están guardados en eq.conf (los reales de arranque)."""
+    gains = {}
+    if not os.path.exists(EQ_CONF_PATH):
+        return gains
+    with open(EQ_CONF_PATH, "r") as f:
+        text = f.read()
+    for band_id in [b[0] for b in BANDS]:
+        pattern = re.compile(
+            r'name\s*=\s*' + re.escape(band_id) + r'\b.*?"Gain"\s*=\s*([-\d.]+)',
+            re.DOTALL,
+        )
+        m = pattern.search(text)
+        if m:
+            try:
+                gains[band_id] = float(m.group(1))
+            except ValueError:
+                pass
+    return gains
+
+
+def read_baked_compressor_params():
+    """Lee los parámetros del compresor tal como están guardados en compressor.conf."""
+    params = {}
+    if not os.path.exists(COMP_CONF_PATH):
+        return params
+    with open(COMP_CONF_PATH, "r") as f:
+        text = f.read()
+    for key in ("threshold", "ratio", "attack", "release", "makeup", "knee", "bypass"):
+        pattern = re.compile(r'"' + re.escape(key) + r'"\s*=\s*([-\d.]+)')
+        m = pattern.search(text)
+        if m:
+            try:
+                params[f"compressor:{key}"] = float(m.group(1))
+            except ValueError:
+                pass
+    return params
 
 class EqualizerApp:
     def __init__(self, root):
@@ -501,13 +538,13 @@ class EqualizerApp:
             b: current.get(f"{b}:Gain", 0.0) for b in self.band_ids
         }
 
-        last_state = load_last_state()
-        saved_gains = last_state.get("gains", {})
-        for band_id, val in saved_gains.items():
+        baked_gains = read_baked_eq_gains()
+        for band_id, val in baked_gains.items():
             if band_id in self.current_gains:
                 self.current_gains[band_id] = val
                 set_param(self.eq_node_id, f"{band_id}:Gain", val)
 
+        last_state = load_last_state()
         self.initial_volume = last_state.get("volume", get_sink_volume_percent(EQ_NODE_NAME))
         set_sink_volume_percent(EQ_NODE_NAME, self.initial_volume)
 
@@ -641,9 +678,8 @@ class EqualizerApp:
         ]
         current = read_current_params(self.comp_node_id, keys)
 
-        last_state = load_last_state()
-        saved_comp = last_state.get("compressor", {})
-        for key, val in saved_comp.items():
+        baked_comp = read_baked_compressor_params()
+        for key, val in baked_comp.items():
             if key in keys:
                 current[key] = val
                 set_param(self.comp_node_id, key, val)
@@ -863,19 +899,8 @@ class EqualizerApp:
         ttk.Button(win, text=t("close_btn"), command=win.destroy).pack(pady=8)
 
     def on_close(self):
-        gains = {band_id: self.sliders[band_id].get() for band_id in self.band_ids}
         volume = getattr(self, "_last_volume", self.initial_volume)
-        state = {"gains": gains, "volume": volume}
-
-        if self.comp_controls:
-            compressor = {
-                key: transform(scale.get())
-                for key, (scale, transform) in self.comp_controls.items()
-            }
-            if self.comp_bypass_var is not None:
-                compressor["compressor:bypass"] = 1.0 if self.comp_bypass_var.get() else 0.0
-            state["compressor"] = compressor
-
+        state = {"volume": volume}
         save_last_state(state)
         self.root.destroy()
 
