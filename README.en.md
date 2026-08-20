@@ -30,7 +30,8 @@ Tested on:
 - pactl
 - pw-cli / pw-dump
 - lilv-utils (optional, to inspect other LV2 plugin ports)
-  - Python modules:
+  
+Python modules:
     - import json
     - import math
     - import datetime
