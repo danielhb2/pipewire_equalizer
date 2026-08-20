@@ -31,17 +31,18 @@ Probado en:
 - pw-cli / pw-dump
 - lilv-utils (opcional, para inspeccionar otros plugins LV2)
 
-  - Módulos python:
-    - import json
-    - import math
-    - import datetime
-    - import locale
-    - import os
-    - import re
-    - import subprocess
-    - import sys
-    - import tkinter as tk
-    - from tkinter import ttk, simpledialog, messagebox
+Módulos python:
+    
+- import json
+- import math
+- import datetime
+- import locale
+- import os
+- import re
+- import subprocess
+- import sys
+- import tkinter as tk
+- from tkinter import ttk, simpledialog, messagebox
 
 ## Instalación típica en Debian/Ubuntu/Armbian:
 
