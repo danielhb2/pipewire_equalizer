@@ -32,16 +32,17 @@ Tested on:
 - lilv-utils (optional, to inspect other LV2 plugin ports)
   
 Python modules:
-    - import json
-    - import math
-    - import datetime
-    - import locale
-    - import os
-    - import re
-    - import subprocess
-    - import sys
-    - import tkinter as tk
-    - from tkinter import ttk, simpledialog, messagebox
+
+- import json
+- import math
+- import datetime
+- import locale
+- import os
+- import re
+- import subprocess
+- import sys
+- import tkinter as tk
+- from tkinter import ttk, simpledialog, messagebox
 
 ## Typical install on Debian/Ubuntu/Armbian:
 
