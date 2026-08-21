@@ -517,7 +517,7 @@ class EqualizerApp:
         CURRENT_LANG = detect_ui_lang()
 
         self.root.title(t("app_title"))
-        self.root.geometry("860x560")
+        self.root.geometry("860x520")
 
         self.eq_node_id = resolve_node_id(EQ_NODE_NAME)
         if self.eq_node_id is None:
@@ -575,6 +575,17 @@ class EqualizerApp:
         self.preset_combo.pack(side="left", padx=4)
         self.preset_combo.bind("<<ComboboxSelected>>", self.on_load_preset)
         self.refresh_preset_list()
+
+        # =========================================================================
+        # CÓDIGO CORREGIDO: Muestra la etiqueta del preset de arranque
+        # =========================================================================
+        last_state = load_last_state()
+        startup_preset = last_state.get("startup_preset", "")
+        if startup_preset in self.preset_combo["values"]:
+            self.preset_var.set(startup_preset)
+        else:
+            self.preset_var.set("")
+        # =========================================================================
 
         ttk.Button(top_frame, text=t("save_preset"), command=self.on_save_preset).pack(side="left", padx=2)
         ttk.Button(top_frame, text=t("delete_preset"), command=self.on_delete_preset).pack(side="left", padx=2)
@@ -856,6 +867,12 @@ class EqualizerApp:
             ok_comp, msg_comp = bake_compressor_params(comp_params)
 
         if ok_eq and ok_comp:
+            # --- GUARDAR EL NOMBRE DEL PRESET DE ARRANQUE ESPECÍFICO ---
+            state = load_last_state()
+            state["startup_preset"] = self.preset_var.get()
+            save_last_state(state)
+            # -----------------------------------------------------------
+
             messagebox.showinfo(
                 t("done_title"),
                 t("done_body") + f"{msg_eq}" + (f"\n{msg_comp}" if msg_comp else ""),
@@ -899,8 +916,27 @@ class EqualizerApp:
         ttk.Button(win, text=t("close_btn"), command=win.destroy).pack(pady=8)
 
     def on_close(self):
+        gains = {band_id: self.sliders[band_id].get() for band_id in self.band_ids}
         volume = getattr(self, "_last_volume", self.initial_volume)
-        state = {"volume": volume}
+        
+        # Recuperar estado anterior para preservar 'startup_preset'
+        current_state = load_last_state()
+        state = {
+            "gains": gains, 
+            "volume": volume, 
+            "preset": self.preset_var.get(),
+            "startup_preset": current_state.get("startup_preset", "") # <-- Preserva el preset guardado de arranque
+        }
+
+        if self.comp_controls:
+            compressor = {
+                key: transform(scale.get())
+                for key, (scale, transform) in self.comp_controls.items()
+            }
+            if self.comp_bypass_var is not None:
+                compressor["compressor:bypass"] = 1.0 if self.comp_bypass_var.get() else 0.0
+            state["compressor"] = compressor
+
         save_last_state(state)
         self.root.destroy()
 
@@ -913,7 +949,16 @@ class EqualizerApp:
         if not name:
             return
         presets = load_presets()
-        presets[name] = {band_id: self.sliders[band_id].get() for band_id in self.band_ids}
+        preset_data = {band_id: self.sliders[band_id].get() for band_id in self.band_ids}
+        if self.comp_controls:
+            compressor = {
+                key: transform(scale.get())
+                for key, (scale, transform) in self.comp_controls.items()
+            }
+            if self.comp_bypass_var is not None:
+                compressor["compressor:bypass"] = 1.0 if self.comp_bypass_var.get() else 0.0
+            preset_data["compressor"] = compressor
+        presets[name] = preset_data
         save_presets(presets)
         self.refresh_preset_list()
         self.preset_var.set(name)
@@ -930,6 +975,18 @@ class EqualizerApp:
                 self.value_labels[band_id].config(text=f"{val:+.1f} dB")
                 self.current_gains[band_id] = val
                 set_param(self.eq_node_id, f"{band_id}:Gain", val)
+
+        compressor = values.get("compressor")
+        if compressor and self.comp_controls:
+            for key, val in compressor.items():
+                if key == "compressor:bypass":
+                    if self.comp_bypass_var is not None:
+                        self.comp_bypass_var.set(bool(val))
+                    set_param(self.comp_node_id, key, val)
+                elif key in self.comp_controls:
+                    scale, transform = self.comp_controls[key]
+                    display_val = linear_to_db(val) if transform is db_to_linear else val
+                    scale.set(display_val)
 
     def on_delete_preset(self):
         name = self.preset_var.get()
